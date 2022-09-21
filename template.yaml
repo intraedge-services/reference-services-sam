@@ -27,9 +27,8 @@ Parameters:
     AllowedPattern: '^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
   
   HostedZoneId:
-    Type: String
+    Type: AWS::SSM::Parameter::Value<String>
     Description: "Hosted Zone ID from Route53"
-    MinLength: 1
 
   FeatureDNSPrefix:
     Type: String

@@ -1,0 +1,21 @@
+version = 0.1
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "ie-starter-kit-services-dmohan"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-1aouh97kkgbvz"
+s3_prefix = "ie-starter-kit-services-dmohan"
+region = "us-east-2"
+profile = "train"
+confirm_changeset = true
+capabilities =  ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND']
+disable_rollback = true
+parameter_overrides = [
+    "ProjectName=ie-starter-kit",
+    "Env=dmohan",
+    "BucketSuffix=samclisourcebucket",
+    "DomainName=starterkit.intraedge.net",
+    "HostedZoneId=/ie-starter-kit/route53/HostedZoneId",
+    "FeatureDNSPrefix=dmohan"
+    ]
+image_repositories = []
