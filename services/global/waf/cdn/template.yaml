@@ -1,0 +1,112 @@
+---
+  AWSTemplateFormatVersion: 2010-09-09
+  Description: Create a WebACL in us-east-1 for use with CloudFront. CDN WebACLs are required to be in us-east-1
+  
+  Parameters:
+    ProjectName:
+      Type: String
+      Description: Name of the Project. Used as prefix for the Stack Set roles.
+      MinLength: 1
+  
+    Env:
+      Description: Deployment Environment, can be prod, dev, feature[n]
+      Type: String
+      MinLength: 1
+  
+  Resources:
+    WebACLStackSet:
+      Type: AWS::CloudFormation::StackSet
+      Properties:
+        Description: Create a WebACL for use with CloudFront
+        PermissionModel: SELF_MANAGED
+        AdministrationRoleARN: 
+          Fn::ImportValue:
+            !Sub ${ProjectName}-${Env}-AdministrationRoleArn
+        ExecutionRoleName: 
+          Fn::ImportValue:
+            !Sub ${ProjectName}-${Env}-ExecutionRoleName
+        StackInstancesGroup:
+          - DeploymentTargets:
+              Accounts:
+                - !Ref "AWS::AccountId"
+            Regions:
+              - us-east-1
+        StackSetName: !Ref AWS::StackName #WebACLStackSetName
+        TemplateBody: !Sub
+          - |
+            AWSTemplateFormatVersion: 2010-09-09
+            Resources:
+              WebAcl:
+                Type: AWS::WAFv2::WebACL
+                Properties:
+                  Name: !Sub ${ProjectName}-${Env}-waf
+                  DefaultAction:
+                    Allow: {}
+                  Description: 'Web Application ACL'
+                  Rules:
+                    - Name: AWSManagedRulesCommonRuleSet
+                      Priority: 0
+                      OverrideAction:
+                        None: {}
+                      VisibilityConfig:
+                        SampledRequestsEnabled: true
+                        CloudWatchMetricsEnabled: true
+                        MetricName: AWSManagedRulesCommonRuleSet
+                      Statement:
+                        ManagedRuleGroupStatement:
+                          VendorName: AWS
+                          Name: AWSManagedRulesCommonRuleSet
+                          ExcludedRules:
+                            - Name: GenericRFI_BODY
+                    - Name: AWSManagedRulesLinuxRuleSet
+                      Priority: 10
+                      OverrideAction:
+                        None: {}
+                      VisibilityConfig:
+                        SampledRequestsEnabled: true
+                        CloudWatchMetricsEnabled: true
+                        MetricName: AWSManagedRulesLinuxRuleSet
+                      Statement:
+                        ManagedRuleGroupStatement:
+                          VendorName: AWS
+                          Name: AWSManagedRulesLinuxRuleSet
+                          ExcludedRules:
+                            - Name: LFI_URIPATH
+                    - Name: AWSManagedRulesAmazonIpReputationList
+                      Priority: 20
+                      OverrideAction:
+                        None: {}
+                      VisibilityConfig:
+                        SampledRequestsEnabled: true
+                        CloudWatchMetricsEnabled: true
+                        MetricName: AWSManagedRulesAmazonIpReputationList
+                      Statement:
+                        ManagedRuleGroupStatement:
+                          VendorName: AWS
+                          Name: AWSManagedRulesAmazonIpReputationList
+                  Scope: 'CLOUDFRONT'
+                  VisibilityConfig:
+                    CloudWatchMetricsEnabled: true
+                    MetricName: !Sub ${ProjectName}-${Env}-metric
+                    SampledRequestsEnabled: true
+
+            Outputs:
+              WebAcl:
+                Description: Web ACL
+                Value: !Ref WebAcl
+                Export:
+                  Name: !Sub ${ProjectName}-${Env}-WebAcl
+
+              WebAclArn:
+                Description: Web ACL ARN
+                Value: !GetAtt WebAcl.Arn
+                Export:
+                  Name: !Sub ${ProjectName}-${Env}-WebAclArn
+          - ProjectName: !Ref ProjectName
+            Env: !Ref Env
+  
+  Outputs:
+    StackSetId:
+      Description: WebACL StackSet Id
+      Value: !Ref WebACLStackSet
+  

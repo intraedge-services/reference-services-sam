@@ -1,0 +1,122 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Serverless API
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the Project. Used as prefix for the Stack Set roles.
+    MinLength: 1
+    
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+    
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: get-all-jobs.js
+  getAllJobsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-getAllJobsFunction
+      Handler: src/handlers/get-all-jobs.getAllJobsHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get all jobs from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the JobTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          JOB_TABLE: !Ref JobTable
+
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # This is a Lambda function config associated with the source code: get-by-id.js
+  getJobByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-getJobByIdFunction
+      Handler: src/handlers/get-by-id.getByIdHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get one job by id from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the JobTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          JOB_TABLE: !Ref JobTable
+      
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: put-job.js
+  putJobFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-putJobFunction
+      Handler: src/handlers/put-job.putJobHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one job to a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the JobTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref JobTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          JOB_TABLE: !Ref JobTable
+    
+  # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
+
+  # DynamoDB table to store Job: {id: &lt;ID&gt;, name: &lt;NAME&gt;}
+  JobTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+Outputs:
+  getAllJobsFunctionArn:
+    Value: !GetAtt getAllJobsFunction.Arn
+
+  getJobByIdFunctionArn:
+    Value: !GetAtt getJobByIdFunction.Arn
+
+  putJobFunctionArn:
+    Value: !GetAtt putJobFunction.Arn

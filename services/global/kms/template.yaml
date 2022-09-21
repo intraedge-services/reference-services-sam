@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: |
+  Lantern Account KMS Stack
+
+Parameters:
+  ParentStackName:
+    Type: 'String'
+    Description: 'Name of parent stack.'
+    MinLength: 1
+
+Conditions:
+  IsParentStack: !Equals [!Ref ParentStackName, '']
+
+Resources:
+
+  # Create CMK
+  AccountEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Enabled: true
+      EnableKeyRotation: true
+      Description: KMS Key
+      KeyPolicy:
+        # Allow access from our AWS Account
+        Version: "2012-10-17"
+        Id: "kms-key"
+        Statement:
+          - Sid: "Enable IAM User Permissions"
+            Effect: Allow
+            Principal:
+              AWS:
+                Fn::Join:
+                  - ""
+                  - - "arn:aws:iam::"
+                    - !Ref AWS::AccountId
+                    - ":root"
+            Action: "kms:*"
+            Resource: "*"
+
+          - Sid: Allow_CloudTrail_to_encrypt
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
+
+  AccountEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName:
+        Fn::If:
+          - IsParentStack
+          - !Sub alias/${AWS::StackName}
+          - !Sub alias/${ParentStackName}
+      TargetKeyId: !Ref AccountEncryptionKey
+
+Outputs:
+
+  AccountEncryptionKeyAlias:
+    Description: Lantern Account CMK Key Alias
+    Value: !Ref AccountEncryptionKeyAlias
+
+  AccountEncryptionKeyArn:
+    Description: Lantern CMK Key Arn
+    Value: !GetAtt AccountEncryptionKey.Arn

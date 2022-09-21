@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Configure StackSet Administrator and Execution Roles to enable use of AWS CloudFormation StackSets.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the Project. Used as prefix for the Stack Set roles.
+    MinLength: 1
+    
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+
+Resources:
+  AdministrationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Env}-StackSetAdministrationRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub AssumeRole-${ProjectName}-${Env}-StackSetExecutionRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource:
+                  - !Sub "arn:*:iam::*:role/${ProjectName}-${Env}-StackSetExecutionRole"
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Env}-StackSetExecutionRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Sub ${AWS::AccountId}
+            Action:
+              - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  AdministrationRoleArn:
+    Description: Stack Set Administration Role Arn
+    Value: !GetAtt AdministrationRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-AdministrationRoleArn
+
+  ExecutionRoleArn:
+    Description: Stack Set Execution Role Name
+    Value: !Ref ExecutionRole
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-ExecutionRoleName

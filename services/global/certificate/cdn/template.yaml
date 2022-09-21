@@ -1,0 +1,95 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a Certificate in us-east-1 for use with CloudFront. CDN certificates are required to be in us-east-1
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the Project. Used as prefix for the Stack Set roles.
+    MinLength: 1
+
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+
+  DomainName:
+    Description: >-
+      Web application domain name for use with Certificate and CloudFront Distribution.
+      If FeatureDNSPrefix is used then the domain name would have the prefix, e.g. feature.domainname.net
+    Type: String
+    MinLength: 5
+    AllowedPattern: '^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+
+  HostedZoneId:
+    Type: String
+    Description: "Hosted Zone ID from Route53"
+    MinLength: 0
+  
+  FeatureDNSPrefix:
+    Type: String
+    Description: |
+      Feature DNS Prefix for feature branches. e.g: feature1,feature2 For staging, production and integration
+      this will be empty.
+    Default: ''
+
+Conditions:
+  IsNonFeatureStack: !Equals [!Ref FeatureDNSPrefix, '']
+
+Resources:
+  CertificateStackSet:
+    Type: AWS::CloudFormation::StackSet
+    Properties:
+      Description: Create a certificate for use with CloudFront
+      PermissionModel: SELF_MANAGED
+      AdministrationRoleARN: 
+        Fn::ImportValue:
+          !Sub ${ProjectName}-${Env}-AdministrationRoleArn
+      ExecutionRoleName: 
+        Fn::ImportValue:
+          !Sub ${ProjectName}-${Env}-ExecutionRoleName
+      StackInstancesGroup:
+        - DeploymentTargets:
+            Accounts:
+              - !Ref "AWS::AccountId"
+          Regions:
+            - us-east-1
+      StackSetName: !Ref AWS::StackName #CertificateStackSetName
+      TemplateBody: !Sub
+        - |
+          AWSTemplateFormatVersion: 2010-09-09
+          Resources:
+            CDNCertificate:
+              Type: AWS::CertificateManager::Certificate
+              Properties:
+                CertificateTransparencyLoggingPreference: ENABLED
+                DomainName: ${DomainName}
+                DomainValidationOptions:
+                  - DomainName: ${DomainName}
+                    HostedZoneId: ${HostedZoneId}
+                ValidationMethod: DNS
+                SubjectAlternativeNames:
+                  - ${SubjectAlternativeNames}
+          Outputs:
+            CDNCertificateArn:
+              Description: Webapp Certificate ARN
+              Value: !Ref CDNCertificate
+              Export:
+                Name: ${CertificateArn}
+        - DomainName: 
+            Fn::If:
+              - IsNonFeatureStack
+              - !Ref DomainName
+              - !Sub ${FeatureDNSPrefix}.${DomainName}
+          HostedZoneId: !Ref HostedZoneId
+          SubjectAlternativeNames: 
+            Fn::If:
+              - IsNonFeatureStack
+              - !Sub www.${DomainName}
+              - !Sub ${FeatureDNSPrefix}.${DomainName}
+          CertificateArn: !Sub ${ProjectName}-${Env}-CDNCertificateArn
+
+Outputs:
+  StackSetId:
+    Description: Certificate StackSet Id
+    Value: !Ref CertificateStackSet
+    

@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  IntraEdege Starter Kit Certificate Arn Custom Serverless Function
+
+Parameters:
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+Transform:
+- AWS::Serverless-2016-10-31
+
+Resources:
+  GetCertificateRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-GetCertificateRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      Policies:
+        - PolicyName: !Sub ${ProjectName}-GetCertificatePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - acm:ListCertificates
+                Resource: "*"
+
+  CertificateArnFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: function/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Architectures:
+        - arm64
+      Role: !GetAtt GetCertificateRole.Arn
+  
+  LogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CertificateArnFunction}"
+      RetentionInDays: 7
+
+Outputs:
+  CertificateArnFunction:
+    Description: Get Certificate Info Function Arn
+    Value: !GetAtt CertificateArnFunction.Arn
+    Export:
+      Name: !Sub ${ProjectName}-CertificateArnFunction-Arn
+  GetCertificateRole:
+    Description: Get Certificate Info Role Arn
+    Value: !GetAtt GetCertificateRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-GetCertificateRoleArn

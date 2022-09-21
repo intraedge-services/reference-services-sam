@@ -1,0 +1,122 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Serverless API
+
+# Transform section specifies one or more macros that AWS CloudFormation uses to process your template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/transform-section-structure.html
+Transform:
+- AWS::Serverless-2016-10-31
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the Project. Used as prefix for the Stack Set roles.
+    MinLength: 1
+    
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+    
+# Resources declares the AWS resources that you want to include in the stack
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/resources-section-structure.html
+Resources:
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: get-all-users.js
+  getAllUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-getAllUsersFunction
+      Handler: src/handlers/get-all-users.getAllUsersHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get all users from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the UserTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          USER_TABLE: !Ref UserTable
+
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+  # This is a Lambda function config associated with the source code: get-by-id.js
+  getUserByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-getUserByIdFunction
+      Handler: src/handlers/get-by-id.getByIdHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP get method to get one user by id from a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the UserTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          USER_TABLE: !Ref UserTable
+      
+  # Each Lambda function is defined by properties:
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+
+  # This is a Lambda function config associated with the source code: put-user.js
+  putUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${ProjectName}-${Env}-putUserFunction
+      Handler: src/handlers/put-user.putUserHandler
+      Runtime: nodejs14.x
+      Architectures:
+        - x86_64
+      MemorySize: 128
+      Timeout: 100
+      Description: A simple example includes a HTTP post method to add one user to a DynamoDB table.
+      Policies:
+        # Give Create/Read/Update/Delete Permissions to the UserTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UserTable
+      Environment:
+        Variables:
+          # Make table name accessible as environment variable from function code during execution
+          USER_TABLE: !Ref UserTable
+    
+  # Simple syntax to create a DynamoDB table with a single attribute primary key, more in
+  # https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlesssimpletable
+
+  # DynamoDB table to store user: {id: &lt;ID&gt;, name: &lt;NAME&gt;}
+  UserTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 2
+        WriteCapacityUnits: 2
+
+Outputs:
+  getAllUsersFunctionArn:
+    Value: !GetAtt getAllUsersFunction.Arn
+
+  getUserByIdFunctionArn:
+    Value: !GetAtt getUserByIdFunction.Arn
+
+  putUserFunctionArn:
+    Value: !GetAtt putUserFunction.Arn

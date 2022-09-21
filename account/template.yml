@@ -1,0 +1,55 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  IntraEdege Starter Kit SAM Stack for Account Resource Deployment
+
+Parameters:
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+  # Workspace:
+  #   Type: String
+  #   Description: Name of the Bitbucket Workspace
+  #   MinLength: 1
+  
+  # Audience:
+  #   Type: String
+  #   Description: The bitbucket audience UUID for workspace
+  #   MinLength: 1
+
+Transform:
+- AWS::Serverless-2016-10-31
+
+Resources:
+  # OIDCDeployRoles:
+    # Type: AWS::Serverless::Application 
+    # Properties:
+    #   TimeoutInMinutes: 5
+    #   Location: resources/security/oidc-deploy-roles/template.yaml
+    #   Parameters:
+    #       ProjectName: !Ref ProjectName
+    #       Workspace: !Ref Workspace
+    #       Audience: !Ref Audience
+
+  CertificateArnCustomFunction:
+    Type: AWS::Serverless::Application 
+    Properties:
+      TimeoutInMinutes: 5
+      Location: resources/custom-resources/certificate-arn/template.yaml
+      Parameters:
+          ProjectName: !Ref ProjectName
+
+  WebACLArnCustomFunction:
+    Type: AWS::Serverless::Application 
+    Properties:
+      TimeoutInMinutes: 5
+      Location: resources/custom-resources/waf-arn/template.yaml
+      Parameters:
+          ProjectName: !Ref ProjectName
+          

@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: |
+  IE-Starter-Kit Webapp S3 Bucket
+
+Parameters:
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+
+Resources:
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub ${ProjectName}-${Env}-webapp
+
+  WebappBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectName}-${Env}-webapp
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'AES256'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+          
+  WebappBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebappBucket
+      PolicyDocument:
+        Statement:
+          - Sid: OriginAccessIdentity
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+            Action:
+              - s3:GetObject
+            Resource: !Sub arn:aws:s3:::${WebappBucket}/*
+
+          - Sid: BitbucketDeploy
+            Effect: Allow
+            Principal: 
+              AWS: 
+                Fn::ImportValue:  
+                  !Sub ${ProjectName}-DeployWebAppRole-Arn
+            Action: 
+              - s3:GetObject
+              - s3:PutObject
+              - s3:ListBucket
+              - s3:DeleteObject
+            Resource:
+              - !Sub arn:aws:s3:::${WebappBucket}
+              - !Sub arn:aws:s3:::${WebappBucket}/*
+
+          - Sid: AllowSSLRequestsOnly
+            Action: 's3:*'
+            Effect: Deny
+            Resource:
+              - !Sub arn:aws:s3:::${WebappBucket}
+              - !Sub arn:aws:s3:::${WebappBucket}/*
+            Condition:
+                Bool: {'aws:SecureTransport': 'false'}
+            Principal: '*'
+
+Outputs:  
+  OriginAccessIdentity:
+    Description: Origin Access Identity for Webapp bucket
+    Value: !Ref OriginAccessIdentity
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-OriginAccessIdentity
+        
+  WebappBucket:
+    Description: Webapp S3 Bucket Name
+    Value: !Ref WebappBucket
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-WebappBucket
+
+  WebappBucketDomainName:
+    Description: S3 Domain name for Webapp bucket
+    Value: !GetAtt WebappBucket.DomainName
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-WebappBucketDomainName
+
+  WebappBucketArn:
+    Description: Webapp S3 Bucket ARN
+    Value: !GetAtt WebappBucket.Arn
+    Export:
+      Name: !Sub ${ProjectName}-${Env}-WebappBucketArn
+

@@ -1,0 +1,59 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  IntraEdege Starter Kit WebACL Arn Custom Serverless Function
+
+Parameters:
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+Transform:
+- AWS::Serverless-2016-10-31
+
+Resources:
+  GetWebACLRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${ProjectName}-GetWebACLRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - arn:aws:iam::aws:policy/AWSWAFReadOnlyAccess
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Path: /
+
+  WebACLArnFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: function/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 30
+      Architectures:
+        - arm64
+      Role: !GetAtt GetWebACLRole.Arn
+  
+  LogsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${WebACLArnFunction}
+      RetentionInDays: 7
+
+Outputs:
+  WebACLArnFunction:
+    Description: Get WebACL Info Function Arn
+    Value: !GetAtt WebACLArnFunction.Arn
+    Export:
+      Name: !Sub ${ProjectName}-WebACLArnFunction-Arn
+  GetWebACLRole:
+    Description: Get WebACL Info Role Arn
+    Value: !GetAtt GetWebACLRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-GetWebACLRoleArn

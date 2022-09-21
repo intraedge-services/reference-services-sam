@@ -1,0 +1,426 @@
+openapi: '3.0.3'
+info:
+  title: 'API Gateway'
+  description: 'REST API For Application'
+  version: '1.0'
+servers:
+  - url: 'https://dev.ie-starter-kit.care'
+  - url: 'https://staging.ie-starter-kit.care'
+    description: production
+
+x-amazon-apigateway-request-validators:
+  all:
+    validateRequestBody: true
+    validateRequestParameters: true
+
+x-amazon-apigateway-request-validator: "all"
+
+x-amazon-apigateway-gateway-responses:
+  BAD_REQUEST_BODY:
+    statusCode: 400
+    responseTemplates:
+      application/json: |
+        {
+          "error": {
+            "code": 400,
+            "request": "$context.requestId",
+            "message": "$context.error.message $context.error.validationErrorString"
+          }
+        }
+
+components:
+  schemas:
+    # Common Schemas
+    UnauthorizedResponse:
+      type: object
+      description: 'Unauthorized Response Schema'
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: number
+          example: 401
+        message:
+          type: string
+          example: 'You are not authorized to access this resource.'
+    ForbiddenResponse:
+      type: object
+      description: 'Forbidden Response Schema'
+      required:
+        - message
+      properties:
+        status:
+          type: number
+          example: 403
+        message:
+          type: string
+          example: 'Your access to this resource is forbidden.'
+    5XXResponse:
+      type: object
+      description: '5XX Response Schema'
+      required:
+        - message
+      properties:
+        status:
+          type: number
+          example: 500
+        message:
+          type: string
+          example: 'The server encountered an unexpected error while proceessing the request. Please try again later.'
+    NotFoundResponse:
+      type: object
+      description: '404 Response Schema'
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: 'The requested resources is not found on the server'
+    BadRequestResponse:
+      type: object
+      description: 'Bad Request Response Schema'
+      required:
+        - msg
+        - param
+      properties:
+        msg:
+          type: string
+          example: 'Employer name is required.'
+        param:
+          type: string
+          example: 'name'
+        location:
+          type: string
+          example: 'body'
+    # User schema
+    User:
+      type: object
+      properties:
+        id: 
+          type: string
+        email:
+          type: string
+    # Job schema
+    Job:
+      type: object
+      properties:
+        id: 
+          type: string
+        userId: 
+          type: string
+        title: 
+          type: string
+  
+  responses:
+    '400':
+      description: 'Bad Request.'
+      content:
+        'application/json':
+          schema:
+            type: array
+            items:
+              "$ref": "#/components/schemas/BadRequestResponse"
+    '401':
+      description: 'Unauthorized request.'
+      content:
+        'application/json':
+          schema:
+            "$ref": "#/components/schemas/UnauthorizedResponse"
+    '403':
+      description: 'Forbidden request.'
+      content:
+        'application/json':
+          schema:
+            "$ref": "#/components/schemas/ForbiddenResponse"
+    '500':
+      description: 'Internal Server Error.'
+      content:
+        'application/json':
+          schema:
+            "$ref": "#/components/schemas/5XXResponse"
+
+    '404':
+      description: 'Not Found'
+      content:
+        'application/json':
+          schema:
+            "$ref": "#/components/schemas/NotFoundResponse"
+    
+paths:
+  # Users APIs
+  '/api/v1/users':
+    get:
+      summary: 'List all users'
+      tags:
+        - Users
+      description: 'Use this api to get a list of all users'
+      operationId: 'listUsers'
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-getAllUsersFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '200':
+          description: 'Successfully retrieved user listing'
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/User"
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404' 
+
+    post:
+      summary: 'Create/Update a user'
+      description: 'Use this api to create/update a user record'
+      operationId: 'createUpdateUser'
+      tags:
+        - User
+      requestBody:
+        description: Create/Update user request schema
+        content:
+          'application/json':
+            schema:
+              "$ref": '#/components/schemas/User'
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: 
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-putUserFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '201':
+          description: 'Successfully created a new employer'
+          content:
+            'application/json':
+              schema: 
+                type: object
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404'
+  
+  '/api/v1/users/{id}':
+    get:
+      summary: 'Get user by id'
+      tags:
+        - Users
+      description: 'Use this api to get user details'
+      operationId: 'GetUser'
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            example: c1260a8b-28f3-4b94-88ff-9bdb3da94f37
+          required: true
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        requestParameters:
+          integration.request.path.id: "method.request.path.id"
+        uri: 
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-getUserByIdFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '200':
+          description: 'Successfully retrieved user listing'
+          content:
+            'application/json':
+              schema:
+                type: object
+                items:
+                  "$ref": "#/components/schemas/User"
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404'
+  
+  # Jobs APIs
+  '/api/v1/jobs':
+    get:
+      summary: 'List all jobs'
+      tags:
+        - Jobs
+      description: 'Use this api to get a list of all jobs'
+      operationId: 'listJobs'
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-getAllJobsFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '200':
+          description: 'Successfully retrieved jobs listing'
+          content:
+            'application/json':
+              schema:
+                type: array
+                items:
+                  "$ref": "#/components/schemas/Job"
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404' 
+
+    post:
+      summary: 'Create/Update a job'
+      description: 'Use this api to create/update a job record'
+      operationId: 'createUpdateJob'
+      tags:
+        - Job
+      requestBody:
+        description: Create/Update job request schema
+        content:
+          'application/json':
+            schema:
+              "$ref": '#/components/schemas/Job'
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        uri: 
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-putJobFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '201':
+          description: 'Successfully created a new employer'
+          content:
+            'application/json':
+              schema: 
+                type: object
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404'
+  
+  '/api/v1/jobs/{id}':
+    get:
+      summary: 'Get job by id'
+      tags:
+        - Jobs
+      description: 'Use this api to get job details'
+      operationId: 'GetJob'
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            example: c1260a8b-28f3-4b94-88ff-9bdb3da94f37
+          required: true
+
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        httpMethod: POST
+        requestParameters:
+          integration.request.path.id: "method.request.path.id"
+        uri: 
+          Fn::Sub:
+            arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-getJobByIdFunction/invocations
+        credentials:
+          Fn::Sub: ${RestApiExecutionRole.Arn}
+        passthroughBehavior: when_no_templates
+        payloadFormatVersion: '1.0'
+        responses:
+          default:
+            statusCode: '200'
+
+      responses:
+        '200':
+          description: 'Successfully retrieved job listing'
+          content:
+            'application/json':
+              schema:
+                type: object
+                items:
+                  "$ref": "#/components/schemas/Job"
+        '400':
+          $ref: '#/components/responses/400' 
+        '401':
+          $ref: '#/components/responses/401' 
+        '403':
+          $ref: '#/components/responses/403' 
+        '500':
+          $ref: '#/components/responses/500' 
+        '404':
+          $ref: '#/components/responses/404'
+                  

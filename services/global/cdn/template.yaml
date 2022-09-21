@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Deploy a Cloudfront Distribution for use with s3 Web application
+
+Parameters:
+  ProjectName:
+    Type: String
+    Description: Name of the Project. Used as prefix for the Stack Set roles.
+    MinLength: 1
+
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+
+  DomainName:
+    Description: >-
+      Web application domain name for CloudFront Distribution.
+      If FeatureDNSPrefix is used then the domain name would have the prefix, e.g. feature.domainname.net
+    Type: String
+    MinLength: 5
+    AllowedPattern: '^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+  
+  FeatureDNSPrefix:
+    Type: String
+    Description: |
+      Feature DNS Prefix for feature branches. e.g: feature-1.,feature-2. For staging, production and integration
+      this will be empty.
+    Default: ''
+  
+
+Conditions:
+  IsNonFeatureStack: !Equals [!Ref FeatureDNSPrefix, '']
+
+Resources:
+  GetCertificateArn:
+    Type: Custom::GetCertificateArn
+    Properties:
+      ServiceToken:
+        Fn::ImportValue:
+          !Sub ${ProjectName}-CertificateArnFunction-Arn
+      Region: us-east-1
+      Domain: 
+        - Fn::If:
+          - IsNonFeatureStack
+          - !Ref DomainName
+          - !Sub ${FeatureDNSPrefix}.${DomainName}
+
+  GetWebACLArn:
+    Type: Custom::GetWebAclArn
+    Properties:
+      ServiceToken:
+        Fn::ImportValue:
+          !Sub ${ProjectName}-WebACLArnFunction-Arn
+      Region: us-east-1
+      WebACLName: !Sub ${ProjectName}-${Env}-waf
+      WAFScope: 'CLOUDFRONT'
+
+  WebAppDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases:
+          - Fn::If:
+            - IsNonFeatureStack
+            - !Sub www.${DomainName}
+            - !Sub ${FeatureDNSPrefix}.${DomainName}
+          - Fn::If:
+            - IsNonFeatureStack
+            - !Ref DomainName
+            - !Sub ${FeatureDNSPrefix}.${DomainName}
+        Enabled: true
+        Origins:
+          - DomainName:  
+              Fn::ImportValue:
+                !Sub ${ProjectName}-${Env}-WebappBucketDomainName
+            Id: 'S3WebApp'
+            S3OriginConfig:
+              OriginAccessIdentity: !Join 
+              - ''
+              - - origin-access-identity/cloudfront/
+                - Fn::ImportValue:
+                    !Sub ${ProjectName}-${Env}-OriginAccessIdentity
+        PriceClass: 'PriceClass_100'
+        WebACLId: !GetAtt GetWebACLArn.WebACLArnId
+        ViewerCertificate:
+          AcmCertificateArn: !GetAtt GetCertificateArn.CertificateArnId
+          SslSupportMethod: 'sni-only'
+          MinimumProtocolVersion: 'TLSv1.2_2021'
+        DefaultRootObject: 'index.html'
+        DefaultCacheBehavior:
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          DefaultTTL: 3600 # in seconds
+          ViewerProtocolPolicy: 'redirect-to-https'
+          TargetOriginId: 'S3WebApp'
+          ForwardedValues:
+            QueryString: true
+
+  CloudfrontDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Name: 
+        Fn::If:
+          - IsNonFeatureStack
+          - !Ref DomainName
+          - !Sub ${FeatureDNSPrefix}.${DomainName}
+      HostedZoneName: !Sub ${DomainName}.
+      AliasTarget:
+        DNSName: !Sub ${WebAppDistribution.DomainName}.
+        HostedZoneId: 'Z2FDTNDATAQYW2' # Always static for cloudfront. This is a public Id.
+      Type: A
+
+  CloudfrontDnsWwwRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: IsNonFeatureStack
+    Properties:
+      Name: !Sub www.${DomainName}
+      HostedZoneName: !Sub ${DomainName}.
+      AliasTarget:
+        DNSName: !Sub ${WebAppDistribution.DomainName}.
+        HostedZoneId: 'Z2FDTNDATAQYW2' # Always static for cloudfront. This is a public Id.
+      Type: A
+
+Outputs:
+  WebAppDistribution:
+    Description: "ClientDistribution distribution id"
+    Value: !Ref WebAppDistribution

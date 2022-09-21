@@ -1,0 +1,152 @@
+# This is the SAM template that represents the architecture of your serverless application
+# https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-sam-template-basics.html
+
+# The AWSTemplateFormatVersion identifies the capabilities of the template
+# https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/format-version-structure.html
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  IntraEdge Starter Kit SAM Stack
+
+Parameters:
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+
+  DomainName:
+    Description: >-
+      Web application domain name for use with Certificate and CloudFront Distribution.
+      If FeatureDNSPrefix is used then the domain name would have the prefix, e.g. feature.domainname.net
+    Type: String
+    MinLength: 5
+    AllowedPattern: '^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+  
+  HostedZoneId:
+    Type: String
+    Description: "Hosted Zone ID from Route53"
+    MinLength: 1
+
+  FeatureDNSPrefix:
+    Type: String
+    Description: |
+      Feature DNS Prefix for feature branches. e.g: feature1,feature2 For staging, production and integration
+      this will be empty.
+    Default: ''
+
+Transform:
+- AWS::Serverless-2016-10-31
+
+Resources:
+  WebappBucket:
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 5
+      Location: services/global/site-assets/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+  
+  StackSetRoles:
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 5
+      Location: services/global/security/stack-set-role/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+
+  CDNCertificate:
+    DependsOn:
+      - StackSetRoles
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 10
+      Location: services/global/certificate/cdn/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+        DomainName: !Ref DomainName
+        FeatureDNSPrefix: !Ref FeatureDNSPrefix
+        HostedZoneId: !Ref HostedZoneId
+
+  AppCertificate:
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 10
+      Location: services/global/certificate/app/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+        DomainName: !Ref DomainName
+        FeatureDNSPrefix: !Ref FeatureDNSPrefix
+        HostedZoneId: !Ref HostedZoneId
+
+  KMSEncryptionKey:
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 10
+      Location: services/global/kms/template.yaml
+      Parameters:
+        ParentStackName: !Sub ${AWS::StackName}
+  
+  UserService:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: services/user-service/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+  
+  JobService:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: services/job-service/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+  
+  ApiGateway:
+    DependsOn:
+      - UserService
+      - JobService
+      - AppCertificate
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: "services/global/api-gateway/template.yaml"
+      Parameters:
+        Env: !Ref Env
+        ProjectName: !Ref ProjectName
+        DomainName: !Ref DomainName
+        FeatureDNSPrefix: !Ref FeatureDNSPrefix
+        HostedZoneId: !Ref HostedZoneId
+        
+  WebACLGlobal:
+    DependsOn:
+      - StackSetRoles
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 15
+      Location: services/global/waf/cdn/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+
+  WebAppDistribution:
+    DependsOn:
+      - WebappBucket
+      - CDNCertificate
+      - WebACLGlobal
+    Type: AWS::Serverless::Application
+    Properties:
+      TimeoutInMinutes: 15
+      Location: services/global/cdn/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        Env: !Ref Env
+        DomainName: !Ref DomainName
+        FeatureDNSPrefix: !Ref FeatureDNSPrefix        

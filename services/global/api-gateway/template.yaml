@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  Env:
+    Description: Deployment Environment, can be prod, dev, feature[n]
+    Type: String
+    MinLength: 1
+  
+  ProjectName:
+    Description: Project Name
+    Type: String
+    MinLength: 5
+
+  DomainName:
+    Description: >-
+      Web application domain name for CloudFront Distribution.
+      If FeatureDNSPrefix is used then the domain name would have the prefix, e.g. feature.domainname.net
+    Type: String
+    MinLength: 5
+    AllowedPattern: '^$|(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$'
+
+  HostedZoneId:
+    Type: String
+    Description: "Hosted Zone ID from Route53"
+    MinLength: 1
+  
+  FeatureDNSPrefix:
+    Type: String
+    Description: |
+      Feature DNS Prefix for feature branches. e.g: feature1,feature2 For staging, production and integration
+      this will be empty.
+    Default: ''
+
+Conditions:
+  IsNonFeatureStack: !Equals [!Ref FeatureDNSPrefix, '']
+
+Resources:
+  RestApiExecutionPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      Description: !Sub ${ProjectName} ${Env} API Gateway Execution Policy
+      ManagedPolicyName: !Sub ${ProjectName}-${Env}-RestApiExecutionPolicy
+      PolicyDocument: !Sub |
+        {
+           "Version": "2012-10-17",
+           "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": [
+                  "lambda:InvokeFunction"
+                ],
+                "Resource": "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-${Env}-*"
+              }
+           ]
+        }
+
+  RestApiExecutionRole:
+    Type : AWS::IAM::Role
+    Properties:
+      Description: !Sub ${ProjectName}-${Env} RestApi ExecutionRole for access to SNS and other services
+      RoleName: !Sub ${ProjectName}-${Env}-RestApiExecutionRole
+      ManagedPolicyArns:
+        - !Ref RestApiExecutionPolicy
+      AssumeRolePolicyDocument: |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "apigateway.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        }
+
+  CloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-${Env}-RestApiCloudWatchRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Action: 'sts:AssumeRole'
+          Effect: Allow
+          Principal:
+            Service: apigateway.amazonaws.com
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
+
+  RestApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub ${ProjectName}-${Env}-RestApiAccessLogGroup
+
+  RestApiCWLRoleArn:
+    Type: AWS::ApiGateway::Account
+    Properties: 
+      CloudWatchRoleArn: !GetAtt CloudWatchRole.Arn
+
+  RestApi:
+    DependsOn:
+       - RestApiExecutionRole
+       - RestApiAccessLogGroup
+       - RestApiCWLRoleArn
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${ProjectName}-${Env}-API-gateway
+      AccessLogSetting:
+          DestinationArn: !GetAtt RestApiAccessLogGroup.Arn
+          Format: |
+            {"requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","requestTimeEpoch": $context.requestTimeEpoch,"httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","path":"$context.path","status": $context.status,"responseLatency": $context.responseLatency,"responseLength":$context.responseLength,"protocol":"$context.protocol","uuid":"$context.authorizer['custom:uuid']","employerId":"$context.authorizer['custom:employer_id']","username":"$context.authorizer['cognito:username']","email":"$context.authorizer['email']","isAdmin":"$context.authorizer['is_admin']","isCarecoach":"$context.authorizer['is_carecoach']","isCaregiver":"$context.authorizer['is_caregiver']","userAgent":"$context.identity.userAgent","errorMessage":"$context.error.messageString","validationError":"$context.error.validationErrorString","traceId":"$context.xrayTraceId"}
+      Cors:
+        AllowMethods: "'*'"
+        AllowOrigin: "'*'"
+        AllowHeaders: "'*'"
+      TracingEnabled: true
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: openapi.yaml
+      StageName: default
+      EndpointConfiguration:
+        Type: 'REGIONAL'
+      MethodSettings:
+        - HttpMethod: '*'
+          ResourcePath: '/*'
+          LoggingLevel: 'INFO'
+          DataTraceEnabled: true
+          MetricsEnabled: true
+      Domain: 
+        DomainName: 
+          Fn::If:
+            - IsNonFeatureStack
+            - !Sub api-${DomainName}
+            - !Sub api-${FeatureDNSPrefix}.${DomainName}
+        CertificateArn:
+          Fn::ImportValue:
+            !Sub ${ProjectName}-${Env}-AppCertificate-Arn
+        EndpointConfiguration: REGIONAL
+        HostedZoneName: !Sub ${DomainName}
+        Route53:
+          HostedZoneId: !Sub ${HostedZoneId}
+ 
+Outputs:
+  RestApiId:
+    Description: 'API Gateway ARN for AWS API Gateway'
+    Value: !Ref RestApi
+
+  GateWayEndpoint:
+    Description: "API Prod stage endpoint"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com"
