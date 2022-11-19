@@ -10,6 +10,9 @@ confirm_changeset = true
 disable_rollback = true
 parameter_overrides = [
     "ProjectName=ie-starter-kit",
+    "GitHubOrg=intraedge-services",
+    "SAMRepository=reference-services-sam",
+    "WebRepository=reference-web-sam"
 ]
 capabilities =  ['CAPABILITY_IAM', 'CAPABILITY_NAMED_IAM', 'CAPABILITY_AUTO_EXPAND']
 image_repositories = []

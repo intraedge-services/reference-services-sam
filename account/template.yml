@@ -30,7 +30,7 @@ Parameters:
     Type: String
     Description: The name of the repository used for web application
     MinLength: 5
-    Default: reference-services-sam
+    Default: reference-web-sam
 
 Transform:
 - AWS::Serverless-2016-10-31
