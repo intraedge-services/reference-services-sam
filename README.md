@@ -17,7 +17,7 @@ This README documents all the steps necessary to get the services for IE Starter
 ### Setup
 - Clone the repository
 ```sh
-git clone git@bitbucket.org:intraedge/services-sam-aws.git
+git clone git@github.com:intraedge-services/reference-services-sam.git
 ```
 
 - Setup AWS Profile

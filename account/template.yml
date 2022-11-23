@@ -12,30 +12,40 @@ Parameters:
     Description: Project Name
     Type: String
     MinLength: 5
+    Default: ie-starter-kit
 
-  # Workspace:
-  #   Type: String
-  #   Description: Name of the Bitbucket Workspace
-  #   MinLength: 1
-  
-  # Audience:
-  #   Type: String
-  #   Description: The bitbucket audience UUID for workspace
-  #   MinLength: 1
+  GitHubOrg:
+    Type: String
+    Description: Organization Name in Git-Hub
+    MinLength: 5
+    Default: intraedge-services
+
+  SAMRepository:
+    Type: String
+    Description: The name of the repository used for SAM
+    MinLength: 5
+    Default: reference-services-sam
+
+  WebRepository:
+    Type: String
+    Description: The name of the repository used for web application
+    MinLength: 5
+    Default: reference-web-sam
 
 Transform:
 - AWS::Serverless-2016-10-31
 
 Resources:
-  # OIDCDeployRoles:
-    # Type: AWS::Serverless::Application 
-    # Properties:
-    #   TimeoutInMinutes: 5
-    #   Location: resources/security/oidc-deploy-roles/template.yaml
-    #   Parameters:
-    #       ProjectName: !Ref ProjectName
-    #       Workspace: !Ref Workspace
-    #       Audience: !Ref Audience
+  OIDCDeployRoles:
+    Type: AWS::Serverless::Application 
+    Properties:
+      TimeoutInMinutes: 5
+      Location: resources/security/oidc-deploy-roles/template.yaml
+      Parameters:
+        ProjectName: !Ref ProjectName
+        GitHubOrg: !Ref GitHubOrg
+        SAMRepository: !Ref SAMRepository
+        WebRepository: !Ref WebRepository
 
   CertificateArnCustomFunction:
     Type: AWS::Serverless::Application 
