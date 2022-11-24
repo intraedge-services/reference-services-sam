@@ -37,6 +37,11 @@ Parameters:
       this will be empty.
     Default: ''
 
+  WebRepository:
+    Type: String
+    Description: The name of the repository used for web application
+    MinLength: 1
+
 Transform:
 - AWS::Serverless-2016-10-31
 
@@ -49,6 +54,7 @@ Resources:
       Parameters:
         ProjectName: !Ref ProjectName
         Env: !Ref Env
+        WebRepository: !Ref WebRepository
   
   StackSetRoles:
     Type: AWS::Serverless::Application
