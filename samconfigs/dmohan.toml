@@ -13,9 +13,9 @@ disable_rollback = true
 parameter_overrides = [
     "ProjectName=ie-starter-kit",
     "Env=dmohan",
-    "BucketSuffix=samclisourcebucket",
     "DomainName=starterkit.intraedge.net",
     "HostedZoneId=/ie-starter-kit/route53/HostedZoneId",
-    "FeatureDNSPrefix=dmohan"
+    "FeatureDNSPrefix=dmohan",
+    "WebRepository=reference-web-sam"
     ]
 image_repositories = []

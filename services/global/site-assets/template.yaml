@@ -14,6 +14,11 @@ Parameters:
     Type: String
     MinLength: 1
 
+  WebRepository:
+    Type: String
+    Description: The name of the repository used for web application
+    MinLength: 1
+
 Resources:
   OriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
@@ -53,8 +58,8 @@ Resources:
             Effect: Allow
             Principal: 
               AWS: 
-                Fn::ImportValue:  
-                  !Sub ${ProjectName}-DeployWebAppRole-Arn
+                Fn::ImportValue:
+                  !Sub ${ProjectName}-${WebRepository}-Role-Arn
             Action: 
               - s3:GetObject
               - s3:PutObject
