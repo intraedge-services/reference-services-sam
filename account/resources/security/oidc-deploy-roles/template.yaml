@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Configure Roles to enable use of Bitbucket OIDC.
+Description: Configure Roles to enable use of GitHub OIDC.
 
 Parameters:
   ProjectName:
@@ -12,15 +12,11 @@ Parameters:
     Description: Organization Name in Git-Hub
     MinLength: 1
 
-  SAMRepository:
+  MonoRepo:
     Type: String
-    Description: The name of the repository used for SAM
+    Description: The name of the mono repository used for SAM and Web
     MinLength: 1
 
-  WebRepository:
-    Type: String
-    Description: The name of the repository used for web application
-    MinLength: 1
 
 Resources:
     # GitHub Specific OIDC reference: 
@@ -39,10 +35,10 @@ Resources:
     DeployWebAppRole:
       Type: AWS::IAM::Role
       Properties:
-        RoleName: !Sub ${ProjectName}-${WebRepository}-Role
+        RoleName: !Sub ${ProjectName}-${MonoRepo}-Role
         Path: /
         Policies:
-          - PolicyName: !Sub ${ProjectName}-${WebRepository}-Policy
+          - PolicyName: !Sub ${ProjectName}-${MonoRepo}-Policy
             PolicyDocument:
               Version: 2012-10-17
               Statement:
@@ -63,13 +59,15 @@ Resources:
                 Federated: !Ref OIDCProvider
               Condition: 
                 StringLike:
-                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${WebRepository}:*
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${MonoRepo}:*
+                StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
 
     DeploySAMServiceRole:
-      # Todo: Create Least Priviledge Role
+      # Todo: Create Least Privileged Role
       Type: AWS::IAM::Role
       Properties:
-        RoleName: !Sub ${ProjectName}-${SAMRepository}-Role
+        RoleName: !Sub ${ProjectName}-${MonoRepo}-Role
         Path: /
         ManagedPolicyArns:
           - arn:aws:iam::aws:policy/AdministratorAccess
@@ -81,17 +79,88 @@ Resources:
                 Federated: !Ref OIDCProvider
               Condition: 
                 StringLike:
-                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${SAMRepository}:*
+                  token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${MonoRepo}:*
+                StringEquals:
+                  token.actions.githubusercontent.com:aud: sts.amazonaws.com
+    
+    SAMDeployerRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: !Sub ${ProjectName}-SAMDeploy-Role
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            -
+              Effect: Allow
+              Principal:
+                Service:
+                  - cloudformation.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Path: /
+        Policies:
+          - PolicyName: !Sub ${ProjectName}-SAMDeploy-Policy
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                -
+                  Effect: Allow
+                  Action:
+                    - lambda:*
+                    - events:*
+                    - states:*
+                    - cloudwatch:*
+                    - apigateway:*
+                    - ec2:DescribeSecurityGroups
+                    - ec2:DescribeSubnets
+                    - ec2:DescribeVpcs
+                    - iam:CreateRole
+                    - iam:CreatePolicy
+                    - iam:AttachRolePolicy
+                    - iam:DetachRolePolicy
+                    - iam:GetRole
+                    - iam:DeleteRole
+                    - iam:PutRolePolicy
+                    - iam:PassRole
+                    - iam:DeleteRolePolicy
+                    - iam:TagRole
+                    - iam:UntagRole
+                    - iam:GetRolePolicy
+                    - iam:DeletePolicy
+                    - cloudformation:*
+                    - dynamodb:*
+                    - sns:*
+                    - sqs:*
+                    - s3:*
+                  Resource: "*"
+                - Action:
+                    - "kms:DescribeKey"
+                    - "kms:GenerateDataKey*"
+                    - "kms:Encrypt"
+                    - "kms:ReEncrypt*"
+                    - "kms:Decrypt"
+                  Resource: !Ref CodePipelineKmsKeyArn
+                  Effect: Allow
+                -
+                  Effect: Allow
+                  Action:
+                    - "s3:GetObject*"
+                    - "s3:PutObject"
+                    - "s3:PutObjectAcl"
+                  Resource:
+                    - !Sub "arn:aws:s3:::${CodePipelineS3Bucket}/*"
         
 Outputs:
   DeployWebAppRole:
     Description: Deploy Webapp Role Arn
     Value: !GetAtt DeployWebAppRole.Arn
     Export:
-      Name: !Sub ${ProjectName}-${WebRepository}-Role-Arn
+      Name: !Sub ${ProjectName}-${MonoRepo}-Role-Arn
 
   DeploySAMServiceRole:
     Description: Deploy SAM Service Role Arn
     Value: !GetAtt DeploySAMServiceRole.Arn
     Export:
-      Name: !Sub ${ProjectName}-${SAMRepository}-Role-Arn
+      Name: !Sub ${ProjectName}-${MonoRepo}-Role-Arn
